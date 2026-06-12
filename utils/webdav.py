@@ -3,10 +3,26 @@
 
 import os  # 文件操作
 import logging  # 日志
+from urllib.parse import quote, urljoin  # URL 编码与拼接
+import requests  # 直接 PUT 上传回退
+from requests.auth import HTTPBasicAuth  # 基础认证
 from webdav3.client import Client  # WebDAV 客户端
 
 
 logger = logging.getLogger(__name__)  # 模块级日志器
+
+
+def _encode_base_url(url):
+  """对 WebDAV 根 URL 中的中文路径进行编码"""
+  if "://" not in url:
+    return url.rstrip("/")
+  scheme, rest = url.split("://", 1)
+  if "/" not in rest:
+    return url.rstrip("/")
+  host, path = rest.split("/", 1)
+  # 逐段编码路径，保留斜杠
+  encoded_path = "/".join(quote(part, safe="") for part in path.split("/") if part)
+  return f"{scheme}://{host}/{encoded_path}".rstrip("/")
 
 
 class WebDAVUploader:
@@ -21,39 +37,68 @@ class WebDAVUploader:
     # 保存远程目录名
     self.inbox_dir = options_config.get("inbox_dir", "Inbox")
     self.attachment_dir = options_config.get("attachment_dir", "Attachments")
-    # 规范化 WebDAV 根 URL（去掉末尾斜杠）
-    base_url = webdav_config["url"].rstrip("/")
-    # 创建 webdavclient3 客户端
+    # 保存认证信息供直接 PUT 使用
+    self.base_url = _encode_base_url(webdav_config["url"])
+    self.username = webdav_config["username"]
+    self.password = webdav_config["password"]
+    # 创建 webdavclient3 客户端（跳过 PROPFIND，部分服务器对 check 返回 403）
     self.client = Client({
-      "webdav_hostname": base_url,
-      "webdav_login": webdav_config["username"],
-      "webdav_password": webdav_config["password"],
+      "webdav_hostname": self.base_url,
+      "webdav_login": self.username,
+      "webdav_password": self.password,
+      "webdav_disable_check": True,
     })
-    # 确保远程 Inbox 和 Attachments 目录存在
+    # 尝试确保远程目录存在
     self._ensure_dirs()
 
   def _normalize_dir(self, remote_dir):
     """规范化远程目录路径（去掉首尾斜杠）"""
     return (remote_dir or "").strip("/")
 
+  def _remote_file_url(self, remote_path):
+    """拼接远程文件的完整 URL"""
+    clean = remote_path.lstrip("/")
+    return urljoin(self.base_url + "/", quote(clean, safe="/"))
+
+  def _put_file_direct(self, remote_path, local_path):
+    """使用 HTTP PUT 直接上传（绕过 webdav3 的 check）"""
+    target_url = self._remote_file_url(remote_path)
+    with open(local_path, "rb") as fp:
+      response = requests.put(
+        target_url,
+        data=fp,
+        auth=HTTPBasicAuth(self.username, self.password),
+        timeout=60,
+      )
+    if response.status_code not in (200, 201, 204):
+      raise RuntimeError(
+        f"PUT 上传失败 {response.status_code}: {target_url} -> {response.text[:200]}"
+      )
+    logger.info("PUT 上传成功: %s", remote_path)
+
+  def _upload_file(self, remote_path, local_path):
+    """优先 webdav3 上传，失败时回退到直接 PUT"""
+    try:
+      self.client.upload_file(
+        remote_path=remote_path,
+        local_path=local_path,
+        force=True,
+      )
+    except Exception as exc:
+      logger.warning("webdav3 上传失败，尝试 PUT: %s", exc)
+      self._put_file_direct(remote_path, local_path)
+
   def _ensure_dir(self, remote_dir):
-    """确保单个远程目录存在，不存在则递归创建"""
+    """确保单个远程目录存在，不存在则尝试创建"""
     path = self._normalize_dir(remote_dir)
     if not path:
       return
     try:
-      # 已存在则跳过
-      if self.client.check(path):
-        return
-    except Exception:
-      # check 失败时继续尝试创建
-      pass
-    try:
-      # 递归创建父级目录
       self.client.mkdir(path, create_parents=True)
       logger.info("已创建远程目录: %s", path)
     except Exception as exc:
-      logger.warning("创建远程目录 %s 失败: %s", path, exc)
+      # 目录可能已存在，或 WebDAV 禁止 MKCOL，忽略继续尝试上传
+      logger.warning("创建远程目录 %s 跳过: %s", path, exc)
 
   def _ensure_dirs(self):
     """确保远程 Inbox 与 Attachments 目录存在"""
@@ -67,16 +112,11 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名（不含目录）
     :return: 远程完整路径
     """
-    # 上传前再次确保目录存在（避免初始化时创建失败）
     self._ensure_dir(self.inbox_dir)
-    # 拼接远程路径
     remote_path = f"{self._normalize_dir(self.inbox_dir)}/{remote_filename}"
-    # 执行同步上传
-    self.client.upload_sync(remote_path=remote_path, local_path=local_path)
-    # 上传成功后删除本地临时文件
+    self._upload_file(remote_path, local_path)
     self._remove_local(local_path)
     logger.info("笔记已上传: %s", remote_path)
-    # 返回远程路径供调用方记录
     return remote_path
 
   def upload_attachment(self, local_path, remote_filename):
@@ -86,24 +126,17 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名
     :return: 远程完整路径
     """
-    # 上传前确保附件目录存在
     self._ensure_dir(self.attachment_dir)
-    # 拼接远程附件路径
     remote_path = f"{self._normalize_dir(self.attachment_dir)}/{remote_filename}"
-    # 同步上传附件
-    self.client.upload_sync(remote_path=remote_path, local_path=local_path)
-    # 删除本地临时文件
+    self._upload_file(remote_path, local_path)
     self._remove_local(local_path)
     logger.info("附件已上传: %s", remote_path)
-    # 返回远程路径
     return remote_path
 
   def _remove_local(self, local_path):
     """安全删除本地临时文件"""
     try:
-      # 仅当文件仍存在时删除
       if os.path.isfile(local_path):
         os.remove(local_path)
     except OSError as exc:
-      # 删除失败记日志
       logger.warning("删除临时文件失败 %s: %s", local_path, exc)
