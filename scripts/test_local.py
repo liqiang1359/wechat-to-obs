@@ -22,6 +22,10 @@ from utils.markdown import (  # noqa: E402
   parse_merged_chat_text,
   format_chat_lines,
 )
+from utils.weixin_article import (  # noqa: E402
+  is_blocked_content,
+  _html_to_markdown,
+)
 from wechatpy.utils import check_signature  # noqa: E402
 import hashlib  # noqa: E402
 
@@ -46,6 +50,23 @@ def test_build_note():
   assert "正文内容" in link_note
   assert "---" not in link_note
   print("✓ Markdown 笔记生成通过")
+
+
+def test_weixin_blocked_detection():
+  """测试识别 Jina/微信验证页等无效抓取内容"""
+  junk = (
+    "Title: Weixin Official Accounts Platform\n\n"
+    "Markdown Content:\n# Weixin Official Accounts Platform\n\n"
+    "## 环境异常\n\n当前环境异常，完成验证后即可继续访问。"
+  )
+  assert is_blocked_content(junk)
+  good = "# 真实标题\n\n这是一段足够长的正文内容，用于测试抓取结果是否被误判为无效页面内容。"
+  assert not is_blocked_content(good)
+  html = '<p>第一段</p><p>第二段<img data-src="https://a.com/1.jpg"/></p>'
+  md = _html_to_markdown(html)
+  assert "第一段" in md
+  assert "![](https://a.com/1.jpg)" in md
+  print("✓ 公众号无效内容识别通过")
 
 
 def test_parse_wechat_shared_link():
@@ -125,6 +146,7 @@ if __name__ == "__main__":
   test_filename()
   test_build_note()
   test_normalize_wechat_paste()
+  test_weixin_blocked_detection()
   test_parse_wechat_shared_link()
   test_parse_chat()
   test_wechat_signature()
