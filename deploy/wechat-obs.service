@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/opt/wechat-to-obs
-Environment=PATH=/opt/wechat-to-obs/.venv/bin
-ExecStart=/opt/wechat-to-obs/.venv/bin/python app.py
+User=root
+Group=root
+WorkingDirectory=/data/wechat-to-obs
+Environment=PATH=/data/wechat-to-obs/.venv/bin
+ExecStart=/data/wechat-to-obs/.venv/bin/python app.py
 Restart=always
 RestartSec=5
 
