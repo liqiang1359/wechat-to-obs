@@ -10,3 +10,7 @@ config.yaml
 # 临时文件目录
 tmp/
 *.log
+
+# 自动同步运行时文件
+scripts/auto_sync.log
+scripts/auto_sync.pid
