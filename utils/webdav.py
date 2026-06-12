@@ -48,6 +48,8 @@ class WebDAVUploader:
       "webdav_password": self.password,
       "webdav_disable_check": True,
     })
+    # 上传超时秒数（大图经内网 WebDAV 可能较慢）
+    self.upload_timeout = int(options_config.get("webdav_upload_timeout", 120))
     # 目录是否已检查过
     self._dirs_ready = False
     # 尝试确保远程目录存在
@@ -71,7 +73,7 @@ class WebDAVUploader:
         target_url,
         data=fp,
         auth=HTTPBasicAuth(self.username, self.password),
-        timeout=60,
+        timeout=self.upload_timeout,
       )
     if response.status_code not in (200, 201, 204):
       raise RuntimeError(
@@ -80,16 +82,8 @@ class WebDAVUploader:
     logger.info("PUT 上传成功: %s", remote_path)
 
   def _upload_file(self, remote_path, local_path):
-    """优先 webdav3 上传，失败时回退到直接 PUT"""
-    try:
-      self.client.upload_file(
-        remote_path=remote_path,
-        local_path=local_path,
-        force=True,
-      )
-    except Exception as exc:
-      logger.warning("webdav3 上传失败，尝试 PUT: %s", exc)
-      self._put_file_direct(remote_path, local_path)
+    """直接用 HTTP PUT 上传（webdav3 在部分网络下 30s 易误报超时）"""
+    self._put_file_direct(remote_path, local_path)
 
   def _ensure_dir(self, remote_dir):
     """确保单个远程目录存在，不存在则尝试创建"""
@@ -130,7 +124,8 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名
     :return: 远程完整路径
     """
-    self._ensure_dir(self.attachment_dir)
+    if not self._dirs_ready:
+      self._ensure_dir(self.attachment_dir)
     remote_path = f"{self._normalize_dir(self.attachment_dir)}/{remote_filename}"
     self._upload_file(remote_path, local_path)
     self._remove_local(local_path)

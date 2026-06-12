@@ -21,6 +21,8 @@ options:
   inbox_dir: Inbox
   attachment_dir: Attachments
   jina_timeout: 30
+  # WebDAV 上传超时（秒），大图建议 120
+  webdav_upload_timeout: 120
   # 笔记首行显示的姓名
   note_author: 徐行
   # 同一用户连续发消息时合并为一个文件
