@@ -94,7 +94,7 @@ class WebDAVUploader:
     if not path:
       return
     try:
-      self.client.mkdir(path, create_parents=True)
+      self.client.mkdir(path, recursive=True)
       logger.info("已创建远程目录: %s", path)
     except Exception as exc:
       # 目录可能已存在，或 WebDAV 禁止 MKCOL，忽略继续尝试上传
