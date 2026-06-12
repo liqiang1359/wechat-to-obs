@@ -137,7 +137,7 @@ def _process_message(raw_xml):
     wechat_client = get_wechat_client()
     chat_handler = ChatHandler(uploader, OPTIONS)
     if chat_handler.handle_raw_xml(raw_xml.decode("utf-8", errors="ignore")):
-      return "success"
+      return
     # 使用 wechatpy 解析标准消息
     message = parse_message(raw_xml)
     msg_id = getattr(message, "id", None)
