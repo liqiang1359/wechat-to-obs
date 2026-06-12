@@ -22,8 +22,8 @@ options:
   attachment_dir: Attachments
   jina_timeout: 30
   # 笔记首行显示的姓名
-  note_author: 李强
+  note_author: 徐行
   # 同一用户连续发消息时合并为一个文件
   merge_enabled: true
-  # 合并时间窗口（秒），默认 180 = 3 分钟
-  merge_window_seconds: 180
+  # 合并时间窗口（秒），默认 300 = 5 分钟
+  merge_window_seconds: 300

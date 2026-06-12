@@ -2,7 +2,7 @@
 """处理器公共基类与工具"""
 
 import logging  # 日志
-from utils.batch import NoteBatcher  # 消息合并
+from utils.batch import get_note_batcher  # 全局消息合并器
 
 
 logger = logging.getLogger(__name__)  # 模块日志
@@ -18,8 +18,8 @@ class BaseHandler:
     """
     self.uploader = uploader  # WebDAV 上传器
     self.options = options  # 业务选项
-    # 按时间窗口合并消息的批处理器
-    self.batcher = NoteBatcher(options)
+    # 全局单例批处理器（同一用户窗口内合并到同一文件）
+    self.batcher = get_note_batcher(options)
 
   def save_note(self, msg_type, body, extra_fields=None, title=None, openid=None):
     """

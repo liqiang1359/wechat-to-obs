@@ -19,23 +19,20 @@ def make_filename(msg_type, dt=None):
 
 def format_message_block(author, body, dt=None, title=None):
   """
-  单条消息块：第一行「姓名 + 日期」，其后为正文
+  单条消息块：第一行「姓名 + 日期」，第二行起为正文
   :param author: 显示在首行的姓名
-  :param body: 消息正文
+  :param body: 消息正文（纯文字仅一行）
   :param dt: 消息时间
-  :param title: 可选标题（链接类消息，并入正文前部）
+  :param title: 可选标题（仅链接类消息使用，拼在正文前）
   :return: 格式化文本
   """
   when = dt or datetime.now()
   date_str = when.strftime("%Y-%m-%d %H:%M:%S")
-  lines = [f"{author}    {date_str}"]
-  content_parts = []
-  if title:
-    content_parts.append(title.strip())
-  if body and body.strip():
-    content_parts.append(body.strip())
-  lines.append("\n".join(content_parts))
-  return "\n".join(lines)
+  header = f"{author}    {date_str}"
+  text = (body or "").strip()
+  if title and title.strip():
+    text = f"{title.strip()}\n{text}" if text else title.strip()
+  return f"{header}\n{text}"
 
 
 def build_note(msg_type, body, extra_fields=None, title=None, author="微信用户", dt=None):

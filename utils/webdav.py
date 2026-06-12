@@ -48,8 +48,11 @@ class WebDAVUploader:
       "webdav_password": self.password,
       "webdav_disable_check": True,
     })
+    # 目录是否已检查过
+    self._dirs_ready = False
     # 尝试确保远程目录存在
     self._ensure_dirs()
+    self._dirs_ready = True
 
   def _normalize_dir(self, remote_dir):
     """规范化远程目录路径（去掉首尾斜杠）"""
@@ -112,7 +115,8 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名（不含目录）
     :return: 远程完整路径
     """
-    self._ensure_dir(self.inbox_dir)
+    if not self._dirs_ready:
+      self._ensure_dir(self.inbox_dir)
     remote_path = f"{self._normalize_dir(self.inbox_dir)}/{remote_filename}"
     self._upload_file(remote_path, local_path)
     self._remove_local(local_path)
