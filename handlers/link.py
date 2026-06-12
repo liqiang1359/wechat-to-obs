@@ -15,7 +15,7 @@ JINA_READER_BASE = "https://r.jina.ai/"
 class LinkHandler(BaseHandler):
   """处理 link 类型及图文消息中的链接"""
 
-  def handle(self, title, url, description=None):
+  def handle(self, title, url, description=None, openid=None):
     """
     处理链接卡片
     :param title: 链接标题
@@ -47,7 +47,7 @@ class LinkHandler(BaseHandler):
     # 合并正文
     body = "\n".join(body_parts)
     # 保存笔记
-    self.save_note("link", body, extra_fields=extra, title=title)
+    self.save_note("link", body, extra_fields=extra, title=title, openid=openid)
     logger.info("已处理链接: %s", url)
 
   def handle_from_text(self, text):

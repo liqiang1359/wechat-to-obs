@@ -31,6 +31,7 @@ class TextHandler(BaseHandler):
       logger.info("文字消息识别为合并聊天记录，共 %d 条", len(chat_items))
       ChatHandler(self.uploader, self.options).handle_items(chat_items)
       return
-    # 普通文字笔记
-    self.save_note("text", content)
+    # 普通文字笔记（同一用户 3 分钟内连续发送会合并到同一文件）
+    openid = getattr(message, "source", None)
+    self.save_note("text", content, openid=openid)
     logger.info("已处理纯文字消息")

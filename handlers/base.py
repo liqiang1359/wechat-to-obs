@@ -2,8 +2,7 @@
 """处理器公共基类与工具"""
 
 import logging  # 日志
-from utils.markdown import build_note, make_filename  # Markdown 生成
-from utils.temp import write_temp_file  # 临时文件
+from utils.batch import NoteBatcher  # 消息合并
 
 
 logger = logging.getLogger(__name__)  # 模块日志
@@ -19,19 +18,22 @@ class BaseHandler:
     """
     self.uploader = uploader  # WebDAV 上传器
     self.options = options  # 业务选项
+    # 按时间窗口合并消息的批处理器
+    self.batcher = NoteBatcher(options)
 
-  def save_note(self, msg_type, body, extra_fields=None, title=None):
+  def save_note(self, msg_type, body, extra_fields=None, title=None, openid=None):
     """
-    生成 .md 并上传到 Inbox
+    生成 .md 并上传到 Inbox（支持短时间窗口内合并）
+    :param openid: 微信用户 OpenID，用于合并判断
     :return: 远程路径
     """
-    # 组装完整笔记内容
-    note_content = build_note(msg_type, body, extra_fields, title)
-    # 生成文件名
-    filename = make_filename(msg_type)
-    # 写入本地临时文件
-    local_path = write_temp_file(note_content, filename)
-    # 上传到 WebDAV Inbox
-    remote_path = self.uploader.upload_note(local_path, filename)
+    remote_path = self.batcher.save_note(
+      self.uploader,
+      openid,
+      msg_type,
+      body,
+      extra_fields=extra_fields,
+      title=title,
+    )
     logger.info("已保存 %s 类型笔记: %s", msg_type, remote_path)
     return remote_path
