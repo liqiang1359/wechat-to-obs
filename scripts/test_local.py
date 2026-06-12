@@ -63,7 +63,7 @@ def test_weixin_blocked_detection():
   good = (
     "# 真实标题\n\n"
     "这是一段足够长的正文内容，用于测试抓取结果是否被误判为无效页面内容。"
-    "需要超过八十个字符才能通过最短长度校验，因此这里多写一些文字作为填充。"
+    "需要超过八十个字符才能通过最短长度校验，因此这里多写一些文字作为填充内容。"
   )
   assert not is_blocked_content(good)
   html = '<p>第一段</p><p>第二段<img data-src="https://a.com/1.jpg"/></p>'
