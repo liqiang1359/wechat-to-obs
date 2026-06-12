@@ -3,6 +3,8 @@
 
 import io  # 标准流包装
 import sys  # 平台检测
+import time  # 消息去重时间戳
+import threading  # 异步处理与去重锁
 import logging  # 日志
 from flask import Flask, request  # Web 框架
 from wechatpy import parse_message  # 解析微信 XML 消息
@@ -12,6 +14,7 @@ from wechatpy import WeChatClient  # 微信 API 客户端
 
 from utils.config import load_config  # 加载配置
 from utils.webdav import WebDAVUploader  # WebDAV 上传
+from utils.batch import get_note_batcher  # 全局消息合并器
 from handlers.text import TextHandler  # 文字处理
 from handlers.link import LinkHandler  # 链接处理
 from handlers.file import FileHandler  # 媒体处理
@@ -44,6 +47,12 @@ _wechat_client = None
 WECHAT_TOKEN = CONFIG["wechat"]["token"]
 # 业务选项
 OPTIONS = CONFIG["options"]
+# 启动时初始化全局合并器（5 分钟窗口、note_author 等）
+get_note_batcher(OPTIONS)
+# 已处理 MsgId 缓存（防止微信超时重试导致重复写入）
+_seen_msg_ids = {}
+_seen_msg_lock = threading.Lock()
+_MSG_ID_TTL = 600  # MsgId 去重保留 10 分钟
 
 
 def get_uploader():
@@ -91,12 +100,37 @@ def _verify_url():
     return "invalid signature", 403
 
 
+def _is_duplicate_msg(msg_id):
+  """判断是否为微信重复推送的同一消息"""
+  if not msg_id:
+    return False
+  now = time.time()
+  with _seen_msg_lock:
+    expired = [k for k, t in _seen_msg_ids.items() if now - t > _MSG_ID_TTL]
+    for key in expired:
+      del _seen_msg_ids[key]
+    if msg_id in _seen_msg_ids:
+      return True
+    _seen_msg_ids[msg_id] = now
+    return False
+
+
 def _handle_message():
-  """解析 XML 消息并按类型分发到对应 Handler"""
+  """先返回 success，再异步处理，避免微信 5 秒超时重试"""
   raw_xml = request.data
   if not raw_xml:
-    logger.warning("收到空 POST  body")
+    logger.warning("收到空 POST body")
     return "success"
+  threading.Thread(
+    target=_process_message,
+    args=(raw_xml,),
+    daemon=True,
+  ).start()
+  return "success"
+
+
+def _process_message(raw_xml):
+  """解析 XML 消息并按类型分发到对应 Handler"""
   try:
     # 先尝试从原始 XML 解析合并聊天记录
     uploader = get_uploader()
@@ -106,6 +140,10 @@ def _handle_message():
       return "success"
     # 使用 wechatpy 解析标准消息
     message = parse_message(raw_xml)
+    msg_id = getattr(message, "id", None)
+    if _is_duplicate_msg(msg_id):
+      logger.info("重复消息已跳过 MsgId=%s", msg_id)
+      return
     msg_type = message.type
     logger.info("收到消息类型: %s", msg_type)
     # 按 MsgType 分发
@@ -148,10 +186,7 @@ def _handle_message():
       else:
         logger.warning("未处理的消息类型: %s", msg_type)
   except Exception as exc:
-    # 捕获异常仍返回 success，避免微信反复重试
     logger.exception("处理消息时发生错误: %s", exc)
-  # 微信要求 5 秒内返回 success
-  return "success"
 
 
 @app.route("/health", methods=["GET"])

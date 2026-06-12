@@ -5,7 +5,7 @@ import logging  # 日志
 import threading  # 并发锁
 from datetime import datetime  # 时间窗口判断
 
-from utils.markdown import build_note, make_filename, format_message_block  # 笔记生成
+from utils.markdown import make_filename, format_message_block  # 笔记生成
 from utils.temp import write_temp_file  # 临时文件
 
 
