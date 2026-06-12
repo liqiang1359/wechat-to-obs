@@ -32,17 +32,33 @@ class WebDAVUploader:
     # 确保远程 Inbox 和 Attachments 目录存在
     self._ensure_dirs()
 
+  def _normalize_dir(self, remote_dir):
+    """规范化远程目录路径（去掉首尾斜杠）"""
+    return (remote_dir or "").strip("/")
+
+  def _ensure_dir(self, remote_dir):
+    """确保单个远程目录存在，不存在则递归创建"""
+    path = self._normalize_dir(remote_dir)
+    if not path:
+      return
+    try:
+      # 已存在则跳过
+      if self.client.check(path):
+        return
+    except Exception:
+      # check 失败时继续尝试创建
+      pass
+    try:
+      # 递归创建父级目录
+      self.client.mkdir(path, create_parents=True)
+      logger.info("已创建远程目录: %s", path)
+    except Exception as exc:
+      logger.warning("创建远程目录 %s 失败: %s", path, exc)
+
   def _ensure_dirs(self):
     """确保远程 Inbox 与 Attachments 目录存在"""
-    # 遍历需要创建的目录
     for remote_dir in (self.inbox_dir, self.attachment_dir):
-      try:
-        # 目录已存在时 fail_on_error=False 不抛异常
-        if not self.client.check(remote_dir):
-          self.client.mkdir(remote_dir)
-      except Exception as exc:
-        # 记录警告但不中断启动
-        logger.warning("创建远程目录 %s 失败: %s", remote_dir, exc)
+      self._ensure_dir(remote_dir)
 
   def upload_note(self, local_path, remote_filename):
     """
@@ -51,8 +67,10 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名（不含目录）
     :return: 远程完整路径
     """
+    # 上传前再次确保目录存在（避免初始化时创建失败）
+    self._ensure_dir(self.inbox_dir)
     # 拼接远程路径
-    remote_path = f"{self.inbox_dir}/{remote_filename}"
+    remote_path = f"{self._normalize_dir(self.inbox_dir)}/{remote_filename}"
     # 执行同步上传
     self.client.upload_sync(remote_path=remote_path, local_path=local_path)
     # 上传成功后删除本地临时文件
@@ -68,8 +86,10 @@ class WebDAVUploader:
     :param remote_filename: 远程文件名
     :return: 远程完整路径
     """
+    # 上传前确保附件目录存在
+    self._ensure_dir(self.attachment_dir)
     # 拼接远程附件路径
-    remote_path = f"{self.attachment_dir}/{remote_filename}"
+    remote_path = f"{self._normalize_dir(self.attachment_dir)}/{remote_filename}"
     # 同步上传附件
     self.client.upload_sync(remote_path=remote_path, local_path=local_path)
     # 删除本地临时文件
