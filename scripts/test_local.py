@@ -60,7 +60,11 @@ def test_weixin_blocked_detection():
     "## 环境异常\n\n当前环境异常，完成验证后即可继续访问。"
   )
   assert is_blocked_content(junk)
-  good = "# 真实标题\n\n这是一段足够长的正文内容，用于测试抓取结果是否被误判为无效页面内容。"
+  good = (
+    "# 真实标题\n\n"
+    "这是一段足够长的正文内容，用于测试抓取结果是否被误判为无效页面内容。"
+    "需要超过八十个字符才能通过最短长度校验，因此这里多写一些文字作为填充。"
+  )
   assert not is_blocked_content(good)
   html = '<p>第一段</p><p>第二段<img data-src="https://a.com/1.jpg"/></p>'
   md = _html_to_markdown(html)
