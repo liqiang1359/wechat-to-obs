@@ -5,7 +5,7 @@ import logging  # 日志
 import threading  # 并发锁
 from datetime import datetime  # 时间窗口判断
 
-from utils.markdown import build_note, make_filename  # 笔记生成
+from utils.markdown import build_note, make_filename, format_message_block  # 笔记生成
 from utils.temp import write_temp_file  # 临时文件
 
 
@@ -19,13 +19,10 @@ class NoteBatcher:
     """
     :param options: 配置中的 options 节
     """
-    # 是否启用合并
     self.enabled = bool(options.get("merge_enabled", True))
-    # 合并时间窗口（秒），默认 3 分钟
     self.window_sec = int(options.get("merge_window_seconds", 180))
-    # 用户会话：openid -> 会话信息
+    self.author = options.get("note_author", "微信用户")
     self._sessions = {}
-    # 保护会话字典的锁
     self._lock = threading.Lock()
 
   def save_note(self, uploader, openid, msg_type, body, extra_fields=None, title=None):
@@ -33,7 +30,6 @@ class NoteBatcher:
     保存或追加笔记（窗口内合并到同一文件）
     :return: 远程路径
     """
-    # 未启用或无 openid 时按单条保存
     if not self.enabled or not openid:
       return self._save_single(
         uploader, msg_type, body, extra_fields=extra_fields, title=title
@@ -42,10 +38,8 @@ class NoteBatcher:
     now = datetime.now()
     with self._lock:
       session = self._sessions.get(openid)
-      # 窗口内则追加到已有文件
       if session and self._in_window(session["last_at"], now):
         return self._append_to_session(uploader, session, now, body, title)
-      # 超时则开启新会话
       return self._start_session(
         uploader, openid, now, msg_type, body,
         extra_fields=extra_fields, title=title,
@@ -58,12 +52,11 @@ class NoteBatcher:
   def _start_session(self, uploader, openid, now, msg_type, body,
                      extra_fields=None, title=None):
     """创建新笔记文件并记录会话"""
-    # 合并模式统一用 note 作为文件名类型
     filename = make_filename("note", now)
-    # 生成首条完整笔记
-    content = build_note(msg_type, body, extra_fields, title)
+    content = build_note(
+      msg_type, body, extra_fields, title, author=self.author, dt=now
+    )
     remote_path = self._upload_content(uploader, content, filename)
-    # 记录会话状态
     self._sessions[openid] = {
       "filename": filename,
       "started_at": now,
@@ -74,24 +67,12 @@ class NoteBatcher:
     return remote_path
 
   def _append_to_session(self, uploader, session, now, body, title=None):
-    """向当前会话文件追加一条消息"""
-    # 追加块：时间分隔线 + 可选小标题 + 正文
-    block_lines = [
-      "",
-      "---",
-      "",
-      f"**{now.strftime('%H:%M:%S')}**",
-      "",
-    ]
-    if title:
-      block_lines.append(f"### {title}")
-      block_lines.append("")
-    block_lines.append(body.strip())
-    append_text = "\n".join(block_lines)
-    # 合并到会话全文
+    """向当前会话文件追加一条消息（同样式：姓名+日期，下一行正文）"""
+    append_text = "\n\n" + format_message_block(
+      self.author, body, dt=now, title=title
+    )
     session["content"] = session["content"] + append_text
     session["last_at"] = now
-    # 覆盖上传同一远程文件
     remote_path = self._upload_content(
       uploader, session["content"], session["filename"]
     )
@@ -99,9 +80,12 @@ class NoteBatcher:
     return remote_path
 
   def _save_single(self, uploader, msg_type, body, extra_fields=None, title=None):
-    """不合并，每条消息单独一个文件（旧行为）"""
-    content = build_note(msg_type, body, extra_fields, title)
-    filename = make_filename(msg_type)
+    """不合并，每条消息单独一个文件"""
+    now = datetime.now()
+    content = build_note(
+      msg_type, body, extra_fields, title, author=self.author, dt=now
+    )
+    filename = make_filename(msg_type, now)
     remote_path = self._upload_content(uploader, content, filename)
     logger.info("已保存单条笔记: %s", remote_path)
     return remote_path

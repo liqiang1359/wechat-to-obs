@@ -33,12 +33,12 @@ def test_filename():
 
 
 def test_build_note():
-  """测试 frontmatter 与正文组装"""
-  note = build_note("link", "正文内容", {"url": "https://a.com"}, title="标题")
-  assert "source: wechat" in note
-  assert "type: link" in note
-  assert "# 标题" in note
+  """测试姓名+日期+正文格式"""
+  note = build_note("link", "正文内容", title="标题", author="李强")
+  assert "李强" in note
   assert "正文内容" in note
+  assert "标题" in note
+  assert "---" not in note
   print("✓ Markdown 笔记生成通过")
 
 
