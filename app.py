@@ -118,6 +118,7 @@ def _handle_message():
         title=message.title,
         url=message.url,
         description=getattr(message, "description", None),
+        openid=getattr(message, "source", None),
       )
     elif msg_type == "voice":
       FileHandler(uploader, OPTIONS, wechat_client).handle_voice(message)
@@ -133,6 +134,7 @@ def _handle_message():
           title=article.title,
           url=article.url,
           description=article.description,
+          openid=getattr(message, "source", None),
         )
     elif msg_type == "event":
       # 关注/取消关注等事件，仅记录日志

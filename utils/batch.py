@@ -31,7 +31,7 @@ class NoteBatcher:
   def save_note(self, uploader, openid, msg_type, body, extra_fields=None, title=None):
     """
     保存或追加笔记（窗口内合并到同一文件）
-  :return: 远程路径
+    :return: 远程路径
     """
     # 未启用或无 openid 时按单条保存
     if not self.enabled or not openid:

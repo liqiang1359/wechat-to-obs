@@ -21,3 +21,7 @@ options:
   inbox_dir: Inbox
   attachment_dir: Attachments
   jina_timeout: 30
+  # 同一用户连续发消息时合并为一个文件
+  merge_enabled: true
+  # 合并时间窗口（秒），默认 180 = 3 分钟
+  merge_window_seconds: 180
