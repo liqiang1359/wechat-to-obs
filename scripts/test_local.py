@@ -34,13 +34,25 @@ def test_filename():
 
 
 def test_build_note():
-  """测试姓名+日期+正文格式"""
-  note = build_note("link", "正文内容", title="标题", author="李强")
-  assert "李强" in note
-  assert "正文内容" in note
-  assert "标题" in note
-  assert "---" not in note
+  """测试不添加微信用户行，并整理微信复制格式"""
+  paste = "徐行\n2026年06月12日 11:13\n但是我开了20X的codex"
+  note = build_note("text", paste)
+  assert "微信用户" not in note
+  assert note.startswith("徐行    2026年06月12日 11:13")
+  assert "但是我开了20X的codex" in note
+  link_note = build_note("link", "正文内容", title="标题")
+  assert "标题" in link_note
+  assert "正文内容" in link_note
+  assert "---" not in link_note
   print("✓ Markdown 笔记生成通过")
+
+
+def test_normalize_wechat_paste():
+  """测试微信三行复制格式整理为两行"""
+  raw = "D\n2026年06月12日 11:13\n价格如何"
+  out = normalize_wechat_paste(raw)
+  assert out == "D    2026年06月12日 11:13\n价格如何", out
+  print("✓ 微信复制格式整理通过")
 
 
 def test_parse_chat():
@@ -94,6 +106,7 @@ def test_flask_health():
 if __name__ == "__main__":
   test_filename()
   test_build_note()
+  test_normalize_wechat_paste()
   test_parse_chat()
   test_wechat_signature()
   test_flask_health()
