@@ -17,6 +17,7 @@ sys.path.insert(0, ROOT)
 from utils.markdown import (  # noqa: E402
   make_filename,
   build_note,
+  normalize_wechat_paste,
   parse_merged_chat_text,
   format_chat_lines,
 )

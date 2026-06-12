@@ -4,6 +4,12 @@
 import re  # 正则解析聊天记录
 from datetime import datetime  # 时间戳与文件名
 
+# 微信复制/转发常见的日期行（中文或 ISO 格式）
+_WECHAT_DATE_LINE_RE = re.compile(
+  r"^(\d{4}年\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2})"
+  r"|^(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?)$"
+)
+
 
 def make_filename(msg_type, dt=None):
   """
@@ -17,36 +23,53 @@ def make_filename(msg_type, dt=None):
   return f"{time_part}-{msg_type}.md"
 
 
-def format_message_block(author, body, dt=None, title=None):
+def normalize_wechat_paste(body):
   """
-  单条消息块：第一行「姓名 + 日期」，第二行起为正文
-  :param author: 显示在首行的姓名
-  :param body: 消息正文（纯文字仅一行）
-  :param dt: 消息时间
-  :param title: 可选标题（仅链接类消息使用，拼在正文前）
+  整理微信复制/转发的多行格式为「姓名    日期\\n正文」
+  不添加「微信用户 + 服务器收到时间」行
+  :param body: 原始消息正文
+  :return: 整理后的文本
+  """
+  text = (body or "").strip()
+  if not text:
+    return ""
+  lines = [ln.rstrip() for ln in text.split("\n")]
+  # 至少三行：姓名、日期、正文
+  if len(lines) >= 3:
+    name = lines[0].strip()
+    date_line = lines[1].strip()
+    if name and _WECHAT_DATE_LINE_RE.match(date_line):
+      content = "\n".join(lines[2:]).strip()
+      header = f"{name}    {date_line}"
+      return f"{header}\n{content}" if content else header
+  return text
+
+
+def format_message_block(body, title=None):
+  """
+  单条消息块：仅整理正文，不添加额外首行
+  :param body: 消息正文
+  :param title: 可选标题（链接类消息拼在正文前）
   :return: 格式化文本
   """
-  when = dt or datetime.now()
-  date_str = when.strftime("%Y-%m-%d %H:%M:%S")
-  header = f"{author}    {date_str}"
-  text = (body or "").strip()
+  text = normalize_wechat_paste(body)
   if title and title.strip():
     text = f"{title.strip()}\n{text}" if text else title.strip()
-  return f"{header}\n{text}"
+  return text
 
 
-def build_note(msg_type, body, extra_fields=None, title=None, author="微信用户", dt=None):
+def build_note(msg_type, body, extra_fields=None, title=None, author=None, dt=None):
   """
-  组装完整笔记（无 YAML frontmatter）
-  :param msg_type: 消息类型（保留参数兼容，不再写入 frontmatter）
+  组装完整笔记（无 YAML frontmatter，不写入 author/dt 行）
+  :param msg_type: 消息类型（保留参数兼容）
   :param body: 正文 Markdown
   :param extra_fields: 兼容旧调用，已忽略
   :param title: 可选标题
-  :param author: 首行显示的姓名
-  :param dt: 消息时间
+  :param author: 兼容旧调用，已忽略
+  :param dt: 兼容旧调用，已忽略
   :return: 完整 .md 文本
   """
-  return format_message_block(author, body, dt=dt, title=title)
+  return format_message_block(body, title=title)
 
 
 def format_chat_lines(chat_items):

@@ -34,7 +34,6 @@ class NoteBatcher:
     """
     self.enabled = bool(options.get("merge_enabled", True))
     self.window_sec = int(options.get("merge_window_seconds", 300))
-    self.author = options.get("note_author", "微信用户")
     self._sessions = {}
     self._lock = threading.Lock()
 
@@ -64,7 +63,7 @@ class NoteBatcher:
   def _start_session(self, uploader, openid, now, msg_type, body, title=None):
     """创建新笔记文件并记录会话"""
     filename = make_filename("note", now)
-    content = format_message_block(self.author, body, dt=now)
+    content = format_message_block(body)
     self._sessions[openid] = {
       "filename": filename,
       "started_at": now,
@@ -77,7 +76,7 @@ class NoteBatcher:
 
   def _append_to_session(self, uploader, session, now, body):
     """向当前会话文件追加一条消息"""
-    append_text = "\n\n" + format_message_block(self.author, body, dt=now)
+    append_text = "\n\n" + format_message_block(body)
     session["content"] = session["content"] + append_text
     session["last_at"] = now
     remote_path = self._upload_content(
@@ -89,7 +88,7 @@ class NoteBatcher:
   def _save_single(self, uploader, msg_type, body, extra_fields=None, title=None):
     """不合并，每条消息单独一个文件"""
     now = datetime.now()
-    content = format_message_block(self.author, body, dt=now, title=title)
+    content = format_message_block(body, title=title)
     filename = make_filename(msg_type, now)
     remote_path = self._upload_content(uploader, content, filename)
     logger.info("已保存单条笔记: %s", remote_path)
