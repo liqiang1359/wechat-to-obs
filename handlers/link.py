@@ -5,6 +5,11 @@ import logging  # 日志
 import re  # URL 提取
 import requests  # HTTP 请求 Jina
 from handlers.base import BaseHandler  # 基类
+from utils.weixin_article import (  # 公众号专用抓取
+  is_weixin_article_url,
+  is_blocked_content,
+  fetch_weixin_article,
+)
 
 
 logger = logging.getLogger(__name__)  # 模块日志
@@ -12,6 +17,11 @@ logger = logging.getLogger(__name__)  # 模块日志
 JINA_READER_BASE = "https://r.jina.ai/"
 # 从纯文本提取 URL
 _URL_RE = re.compile(r"https?://[^\s\]\)】]+")
+# 公众号抓取失败时的提示
+_WEIXIN_FALLBACK_HINT = (
+  "> 公众号文章无法在服务器端自动抓取（微信反爬限制），"
+  "请直接点击上方链接在微信中阅读。"
+)
 
 
 class LinkHandler(BaseHandler):
@@ -46,22 +56,28 @@ class LinkHandler(BaseHandler):
     else:
       body_parts.append(title)
     body_parts.append(url)
+    fetch_failed = False
     if self.options.get("fetch_full_article", True) and url:
       article_md = self._fetch_full_article(url)
       if article_md:
         body_parts.append("")
         body_parts.append(article_md)
       else:
-        if description:
+        fetch_failed = True
+        if is_weixin_article_url(url):
+          body_parts.append("")
+          body_parts.append(_WEIXIN_FALLBACK_HINT)
+        elif description:
           body_parts.append("")
           body_parts.append(description)
-        logger.warning("Jina 抓取失败，已降级为标题+URL: %s", url)
+        logger.warning("文章抓取失败，已降级为标题+URL: %s", url)
     elif description:
       body_parts.append("")
       body_parts.append(description)
     body = "\n".join(body_parts)
     self.save_note("link", body, openid=openid)
-    logger.info("已处理链接: %s", url)
+    status = "降级" if fetch_failed else "全文"
+    logger.info("已处理链接(%s): %s", status, url)
 
   def handle_from_text(self, text, openid=None):
     """
@@ -92,12 +108,21 @@ class LinkHandler(BaseHandler):
 
   def _fetch_full_article(self, url):
     """
-    调用 Jina Reader API 获取 Markdown 正文
+    抓取文章全文：公众号走专用解析，其他站点走 Jina
     :param url: 原始文章 URL
     :return: Markdown 字符串，失败返回 None
     """
-    jina_url = f"{JINA_READER_BASE}{url}"
     timeout = self.options.get("jina_timeout", 30)
+    if is_weixin_article_url(url):
+      content = fetch_weixin_article(url, timeout=timeout)
+      if content and not is_blocked_content(content):
+        return content
+      return None
+    return self._fetch_via_jina(url, timeout=timeout)
+
+  def _fetch_via_jina(self, url, timeout=30):
+    """调用 Jina Reader API 获取 Markdown 正文"""
+    jina_url = f"{JINA_READER_BASE}{url}"
     try:
       resp = requests.get(
         jina_url,
@@ -108,6 +133,9 @@ class LinkHandler(BaseHandler):
         logger.warning("Jina 返回 HTTP %s: %s", resp.status_code, url)
         return None
       content = resp.text.strip()
+      if is_blocked_content(content):
+        logger.warning("Jina 返回无效内容: %s", url)
+        return None
       if len(content) < 50:
         logger.warning("Jina 返回内容过短: %s", url)
         return None
