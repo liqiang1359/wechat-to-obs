@@ -48,7 +48,7 @@ def test_parse_chat():
   items = parse_merged_chat_text(text)
   assert len(items) == 2, items
   body = format_chat_lines(items)
-  assert "**张三** 10:30" in body
+  assert "张三    10:30" in body
   print("✓ 聊天记录解析通过")
 
 
