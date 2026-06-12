@@ -16,7 +16,7 @@ HOST = "192.168.99.211"
 # SSH 用户
 USER = "root"
 # 私钥路径
-KEY_PATH = r"C:\Users\Bill\.ssh\id_ed25519_wechat"
+KEY_PATH = r"C:\Users\Bill\.ssh\id_ed25519_deploy"
 # 一键部署命令
 DEPLOY_CMD = (
   "curl -fsSL https://raw.githubusercontent.com/liqiang1359/wechat-to-obs/main/deploy/deploy_linux.sh | bash"
