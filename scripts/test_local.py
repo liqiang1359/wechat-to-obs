@@ -18,6 +18,7 @@ from utils.markdown import (  # noqa: E402
   make_filename,
   build_note,
   normalize_wechat_paste,
+  parse_wechat_shared_link,
   parse_merged_chat_text,
   format_chat_lines,
 )
@@ -45,6 +46,23 @@ def test_build_note():
   assert "正文内容" in link_note
   assert "---" not in link_note
   print("✓ Markdown 笔记生成通过")
+
+
+def test_parse_wechat_shared_link():
+  """测试微信 [链接] 转发格式解析"""
+  raw = (
+    "无水的鱼    2026年06月12日 14:41\n"
+    "[链接] 化繁为简-AIMIX智剪 V1.4.7 产品功能更新\n"
+    "https://mp.weixin.qq.com/s?__biz=MzkyMDYxODU0NQ==&mid=2247484107"
+  )
+  info = parse_wechat_shared_link(raw)
+  assert info is not None, info
+  assert info["header"] == "无水的鱼    2026年06月12日 14:41"
+  assert "AIMIX" in info["title"]
+  assert info["url"].startswith("https://mp.weixin.qq.com/")
+  plain = "你好世界"
+  assert parse_wechat_shared_link(plain) is None
+  print("✓ [链接] 转发解析通过")
 
 
 def test_normalize_wechat_paste():
@@ -107,6 +125,7 @@ if __name__ == "__main__":
   test_filename()
   test_build_note()
   test_normalize_wechat_paste()
+  test_parse_wechat_shared_link()
   test_parse_chat()
   test_wechat_signature()
   test_flask_health()
