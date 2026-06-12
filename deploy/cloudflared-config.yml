@@ -1,0 +1,13 @@
+# Cloudflare Tunnel 配置示例
+# 复制到服务器 /etc/cloudflared/config.yml 并替换 <TUNNEL_ID>
+
+# 隧道 ID（cloudflared tunnel create wechat-obs 后获得）
+tunnel: <TUNNEL_ID>
+# 隧道凭证文件路径
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+# 入站路由：外网 HTTPS → 本机 Flask（含 /wechat 与 /health）
+ingress:
+  - hostname: wechat.nobbn.com
+    service: http://127.0.0.1:5000
+  - service: http_status:404

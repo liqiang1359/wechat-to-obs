@@ -1,0 +1,23 @@
+# 微信订阅号配置（mp.weixin.qq.com → 设置与开发 → 基本配置）
+wechat:
+  token: your_token_here
+  app_id: your_app_id_here
+  app_secret: your_app_secret_here
+
+# Flask 服务监听（配合 Cloudflare Tunnel 时用 127.0.0.1，仅本机访问）
+server:
+  port: 5000
+  host: 127.0.0.1
+
+# WebDAV 同步目标（Obsidian Vault 根目录）
+webdav:
+  url: http://dav.nobbn.com/Obsidian
+  username: your_webdav_username
+  password: your_webdav_password
+
+# 业务选项
+options:
+  fetch_full_article: true
+  inbox_dir: Inbox
+  attachment_dir: Attachments
+  jina_timeout: 30

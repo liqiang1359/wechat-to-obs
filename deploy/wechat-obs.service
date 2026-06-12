@@ -1,0 +1,16 @@
+[Unit]
+Description=WeChat to Obsidian Sync Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/wechat-to-obs
+Environment=PATH=/opt/wechat-to-obs/.venv/bin
+ExecStart=/opt/wechat-to-obs/.venv/bin/python app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

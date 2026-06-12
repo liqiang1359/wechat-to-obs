@@ -1,0 +1,6 @@
+flask
+wechatpy
+cryptography
+webdavclient3
+requests
+pyyaml

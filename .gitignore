@@ -1,0 +1,12 @@
+# Python 虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 本地配置（含密钥）
+config.yaml
+
+# 临时文件目录
+tmp/
+*.log
