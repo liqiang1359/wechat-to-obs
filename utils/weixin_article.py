@@ -176,8 +176,13 @@ def fetch_weixin_article(url, timeout=30):
 
 
 def _is_verification_page(page_html):
-  """判断是否为微信环境验证页"""
-  return "环境异常" in page_html and "验证" in page_html
+  """判断是否为微信环境验证页（避免大图页误伤）"""
+  if len(page_html) > 500000:
+    return False
+  return (
+    "环境异常" in page_html
+    and "完成验证后即可继续访问" in page_html
+  )
 
 
 def _is_picture_page(page_html):
@@ -212,6 +217,8 @@ def extract_weixin_image_urls(page_html):
     url = raw.replace("\\/", "/").strip()
     if "mmbiz.qpic.cn" not in url:
       continue
+    if url.startswith("http://"):
+      url = "https://" + url[7:]
     if url in seen:
       continue
     seen.add(url)

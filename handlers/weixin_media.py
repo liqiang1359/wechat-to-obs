@@ -30,13 +30,10 @@ class WeixinMediaHandler(BaseHandler):
     title=None,
     from_image_marker=False,
   ):
-    """
-    将图片 URL 列表下载到 Attachments 并生成笔记
-    :param image_urls: 图片 URL 列表
-    :param source_url: 来源页面 URL（可选）
-    :param title: 图片标题（可选）
-    :param from_image_marker: 是否来自 [图片] 转发
-    """
+    """将图片 URL 列表下载到 Attachments 并生成笔记（失败时用远程链接）"""
+    if not image_urls:
+      logger.warning("图片 URL 列表为空: %s", source_url)
+      return False
     attachment_dir = self.options.get("attachment_dir", "Attachments")
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     body_parts = []
@@ -44,32 +41,30 @@ class WeixinMediaHandler(BaseHandler):
       body_parts.append(header)
       body_parts.append("")
     label = title or "图片"
-    if from_image_marker:
-      body_parts.append(f"[图片] {label}")
-    else:
-      body_parts.append(f"[图片] {label}")
+    body_parts.append(f"[图片] {label}")
     if source_url:
       body_parts.append(source_url)
     wiki_lines = []
-    saved = 0
+    saved_local = 0
     for idx, img_url in enumerate(image_urls[:_MAX_IMAGES]):
-      data = download_image_bytes(img_url)
-      if not data:
-        continue
-      ext = image_ext_from_url(img_url)
-      filename = f"weixin_{ts}_{idx + 1}{ext}"
-      local_path = write_temp_bytes(data, filename)
-      self.uploader.upload_attachment(local_path, filename)
-      wiki_lines.append(f"![[{attachment_dir}/{filename}]]")
-      saved += 1
-    if not wiki_lines:
-      logger.warning("图片全部下载失败: %s", source_url or image_urls[:1])
-      return False
+      line = f"![]({img_url})"
+      try:
+        data = download_image_bytes(img_url)
+        if data:
+          ext = image_ext_from_url(img_url)
+          filename = f"weixin_{ts}_{idx + 1}{ext}"
+          local_path = write_temp_bytes(data, filename)
+          self.uploader.upload_attachment(local_path, filename)
+          line = f"![[{attachment_dir}/{filename}]]"
+          saved_local += 1
+      except Exception as exc:
+        logger.warning("图片保存失败，改用远程链接 %s: %s", img_url[:60], exc)
+      wiki_lines.append(line)
     body_parts.append("")
     body_parts.extend(wiki_lines)
     body = "\n".join(body_parts)
     self.save_note("image", body, openid=openid)
-    logger.info("已保存微信图片 %d 张", saved)
+    logger.info("已保存微信图片 本地 %d 张 / 共 %d 张", saved_local, len(wiki_lines))
     return True
 
   def handle_weixin_url(
@@ -79,14 +74,16 @@ class WeixinMediaHandler(BaseHandler):
     header=None,
     title=None,
     from_image_marker=False,
+    resolved=None,
   ):
-    """
-    解析公众号链接，若为图片页则下载保存
-    :return: True 表示已处理
-    """
-    timeout = self.options.get("jina_timeout", 30)
-    resolved = resolve_weixin_url(url, timeout=timeout)
-    if not resolved or resolved.get("kind") != "images":
+    """解析公众号链接，若为图片页则下载保存"""
+    if resolved is None:
+      timeout = self.options.get("jina_timeout", 30)
+      resolved = resolve_weixin_url(url, timeout=timeout)
+    if not resolved:
+      logger.warning("公众号页面解析失败: %s", url)
+      return False
+    if resolved.get("kind") != "images":
       return False
     page_title = title or resolved.get("title") or "图片"
     return self.handle_image_urls(

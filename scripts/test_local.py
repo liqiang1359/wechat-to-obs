@@ -25,7 +25,10 @@ from utils.markdown import (  # noqa: E402
 from utils.weixin_article import (  # noqa: E402
   is_blocked_content,
   _html_to_markdown,
+  extract_weixin_image_urls,
+  _is_picture_page,
 )
+from utils.markdown import parse_wechat_shared_image  # noqa: E402
 from wechatpy.utils import check_signature  # noqa: E402
 import hashlib  # noqa: E402
 
@@ -71,6 +74,22 @@ def test_weixin_blocked_detection():
   assert "第一段" in md
   assert "![](https://a.com/1.jpg)" in md
   print("✓ 公众号无效内容识别通过")
+
+
+def test_weixin_picture_page():
+  """测试公众号图片页标记与 [图片] 解析"""
+  sample_html = (
+    '<meta property="og:image" content="http://mmbiz.qpic.cn/a.jpg?wx_fmt=jpeg"/>'
+    'picture_page cdn_url: "http://mmbiz.qpic.cn/b.jpg?wx_fmt=jpeg"'
+  )
+  assert _is_picture_page(sample_html)
+  urls = extract_weixin_image_urls(sample_html)
+  assert len(urls) >= 2
+  raw = "无水的鱼\n[图片]\nhttps://mp.weixin.qq.com/s/abc123"
+  info = parse_wechat_shared_image(raw)
+  assert info["title"] == "图片"
+  assert "mp.weixin.qq.com" in info["url"]
+  print("✓ 公众号图片页识别通过")
 
 
 def test_parse_wechat_shared_link():
@@ -151,6 +170,7 @@ if __name__ == "__main__":
   test_build_note()
   test_normalize_wechat_paste()
   test_weixin_blocked_detection()
+  test_weixin_picture_page()
   test_parse_wechat_shared_link()
   test_parse_chat()
   test_wechat_signature()
