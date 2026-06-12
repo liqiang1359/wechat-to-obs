@@ -9,6 +9,9 @@ _WECHAT_DATE_LINE_RE = re.compile(
   r"^(\d{4}年\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2})"
   r"|^(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?)$"
 )
+# 微信转发链接标记与 URL 提取
+_LINK_MARKER_RE = re.compile(r"\[链接\]")
+_URL_RE = re.compile(r"https?://[^\s\]\)】]+")
 
 
 def make_filename(msg_type, dt=None):
@@ -43,6 +46,38 @@ def normalize_wechat_paste(body):
       header = f"{name}    {date_line}"
       return f"{header}\n{content}" if content else header
   return text
+
+
+def parse_wechat_shared_link(text):
+  """
+  解析微信转发的 [链接] 纯文本格式
+  形如：姓名 日期\\n[链接] 标题\\nhttps://...
+  :param text: 原始消息正文
+  :return: {"title", "url", "header"} 或 None
+  """
+  raw = (text or "").strip()
+  if not raw or not _LINK_MARKER_RE.search(raw):
+    return None
+  url_match = _URL_RE.search(raw)
+  if not url_match:
+    return None
+  url = url_match.group(0).rstrip(".,;)")
+  title = ""
+  header = None
+  for line in raw.split("\n"):
+    stripped = line.strip()
+    if not stripped:
+      continue
+    if stripped.startswith("http://") or stripped.startswith("https://"):
+      continue
+    if _LINK_MARKER_RE.search(stripped):
+      title = _LINK_MARKER_RE.sub("", stripped).strip()
+      continue
+    if header is None:
+      header = stripped
+  if not title:
+    title = url
+  return {"title": title, "url": url, "header": header}
 
 
 def format_message_block(body, title=None):
